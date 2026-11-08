@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Decentralized Voting dApp</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+</head>
+<body>
+
+  <div class="card">
+
+    <img src="https://cryptologos.cc/logos/ethereum-eth-logo.png" alt="Ethereum Logo">
+
+    <h1>Campus Voting dApp</h1>
+    <p>Vote transparently on the Sepolia testnet using MetaMask.</p>
+
+
+    <ul>
+      <li>Connect your Sepolia wallet</li>
+      <li>Each wallet address can only vote once</li>
+      <li>All votes are permanently tallied on-chain</li>
+    </ul>
+
+    <p>Guide: <a href="https://www.w3schools.com/js/" target="_blank">W3Schools JavaScript</a></p>
+
+    <button onclick="connectWallet()">Connect MetaMask</button>
+    <p id="walletAddress" style="font-size: 0.85rem; color: #475569;">Not Connected</p>
+
+    <hr>
+
+    <h3>Live Poll Results</h3>
+    <div class="tally-box">
+      <p id="tally">Candidate 1: 0 | Candidate 2: 0</p>
+    </div>
+    <button class="secondary" onclick="readVotes()">Refresh Results</button>
+    <button class="secondary" onclick="checkIfVoted()">Did I Vote?</button>
+
+    <hr>
+
+    <h3>Cast Your Vote</h3>
+    <button onclick="castVote(1)">Vote Candidate 1</button>
+    <button onclick="castVote(2)">Vote Candidate 2</button>
+    <br>
+    <button class="secondary" onclick="resetPoll()">Reset Poll</button>
+
+    <p id="status"></p>
+  </div>
+
+  <script>
+    const CONTRACT_ADDRESS = "0xC7144b5a693c3e3Cca22FD824DbCD146F4807581";
+
+    const ABI = [
+      "function round() view returns (uint256)",
+      "function candidate1Votes() view returns (uint256)",
+      "function candidate2Votes() view returns (uint256)",
+      "function vote(uint256 _candidateId)",
+      "function getVotes() view returns (uint256, uint256)",
+      "function checkHasVoted(address _voter) view returns (bool)",
+      "function resetPoll()"
+    ];
+
+    let provider;
+    let signer;
+    let contract;
+
+    async function connectWallet() {
+      if (window.ethereum) {
+        provider = new ethers.providers.Web3Provider(window.ethereum);
+        await provider.send("eth_requestAccounts", []);
+        signer = provider.getSigner();
+
+        const address = await signer.getAddress();
+        document.getElementById("walletAddress").innerText = "Connected: " + address;
+
+        contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+        document.getElementById("status").innerText = "Wallet connected.";
+        readVotes();
+      } else {
+        alert("MetaMask not detected! Use VS Code Live Server.");
+      }
+    }
+
+    async function readVotes() {
+      if (!contract) return;
+      try {
+        const votes = await contract.getVotes();
+        document.getElementById("tally").innerText = 
+          "Candidate 1: " + votes[0].toString() + " | Candidate 2: " + votes[1].toString();
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function checkIfVoted() {
+      if (!contract) return alert("Connect wallet first!");
+      try {
+        const address = await signer.getAddress();
+        const hasVoted = await contract.checkHasVoted(address);
+        document.getElementById("status").innerText = 
+          hasVoted ? "You have ALREADY voted in this round." : "You have NOT voted yet.";
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function castVote(candidateId) {
+      if (!contract) return alert("Connect wallet first!");
+      document.getElementById("status").innerText = "Waiting for MetaMask confirmation...";
+
+      try {
+        const tx = await contract.vote(candidateId);
+        document.getElementById("status").innerText = "Transaction pending: " + tx.hash;
+        await tx.wait();
+        document.getElementById("status").innerText = "Vote confirmed on Sepolia!";
+        readVotes();
+      } catch (err) {
+        document.getElementById("status").innerText = "Transaction failed or already voted!";
+      }
+    }
+
+    async function resetPoll() {
+      if (!contract) return alert("Connect wallet first!");
+      document.getElementById("status").innerText = "Resetting poll...";
+
+      try {
+        const tx = await contract.resetPoll();
+        await tx.wait();
+        document.getElementById("status").innerText = "Poll reset! New round started.";
+        readVotes();
+      } catch (err) {
+        document.getElementById("status").innerText = "Reset transaction failed!";
+      }
+    }
+  </script>
+</body>
+</html>
